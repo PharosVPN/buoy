@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/PharosVPN/buoy/internal/awg"
 	"github.com/PharosVPN/buoy/internal/config"
 	"github.com/PharosVPN/buoy/internal/control"
 	"github.com/spf13/cobra"
@@ -36,13 +37,26 @@ func newRunCmd() *cobra.Command {
 				"config_dir", cfg.Dir,
 				"listen_addr", cfg.Control.ListenAddr)
 
-			srv, err := control.NewServer(
-				cfg.Control.ListenAddr,
-				cfg.NodeCertPath(),
-				cfg.NodeKeyPath(),
-				cfg.CACertPath(),
-				log,
-			)
+			// The node's AmneziaWG identity is generated on first run and
+			// reused thereafter, so the obfuscation set helm caches stays
+			// stable across restarts (DESIGN §3).
+			awgNode, err := awg.Load(cfg.AWGStatePath())
+			if err != nil {
+				return err
+			}
+			log.Info("AmneziaWG node identity ready",
+				"public_key", awgNode.PublicKey(),
+				"state_file", cfg.AWGStatePath())
+
+			srv, err := control.NewServer(control.Options{
+				ListenAddr:   cfg.Control.ListenAddr,
+				NodeCertPath: cfg.NodeCertPath(),
+				NodeKeyPath:  cfg.NodeKeyPath(),
+				CACertPath:   cfg.CACertPath(),
+				Version:      version,
+				AWGNode:      awgNode,
+				Log:          log,
+			})
 			if err != nil {
 				return err
 			}

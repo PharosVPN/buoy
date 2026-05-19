@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/PharosVPN/buoy/internal/awg"
 	buoyv1 "github.com/PharosVPN/buoy/internal/gen/pharos/buoy/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -32,23 +33,36 @@ type Server struct {
 	log  *slog.Logger
 }
 
-// NewServer builds a NodeControl server bound to addr.
-//
-//   - nodeCertPath holds the node's leaf certificate followed by the Fleet
-//     intermediate; nodeKeyPath holds its matching private key.
-//   - caCertPath holds the root CA — client certificates must chain to it.
-//
-// The returned server is not yet listening; call Serve.
-func NewServer(addr, nodeCertPath, nodeKeyPath, caCertPath string, log *slog.Logger) (*Server, error) {
-	tlsCfg, err := serverTLS(nodeCertPath, nodeKeyPath, caCertPath)
+// Options configures a NodeControl Server.
+type Options struct {
+	// ListenAddr is the TCP address the server binds to.
+	ListenAddr string
+	// NodeCertPath holds the node's leaf certificate followed by the Fleet
+	// intermediate; NodeKeyPath holds its matching private key.
+	NodeCertPath string
+	NodeKeyPath  string
+	// CACertPath holds the root CA — client certificates must chain to it.
+	CACertPath string
+	// Version is the agent version GetStatus reports.
+	Version string
+	// AWGNode is the node's AmneziaWG identity, reported by GetStatus.
+	AWGNode *awg.Node
+	// Log receives server diagnostics.
+	Log *slog.Logger
+}
+
+// NewServer builds a NodeControl server from opts. The returned server is not
+// yet listening; call Serve.
+func NewServer(opts Options) (*Server, error) {
+	tlsCfg, err := serverTLS(opts.NodeCertPath, opts.NodeKeyPath, opts.CACertPath)
 	if err != nil {
 		return nil, err
 	}
 
 	gs := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsCfg)))
-	buoyv1.RegisterNodeControlServer(gs, newService())
+	buoyv1.RegisterNodeControlServer(gs, newService(opts.Version, opts.AWGNode))
 
-	return &Server{addr: addr, grpc: gs, log: log}, nil
+	return &Server{addr: opts.ListenAddr, grpc: gs, log: opts.Log}, nil
 }
 
 // Serve binds the listener and serves until ctx is cancelled, then stops

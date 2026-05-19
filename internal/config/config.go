@@ -27,6 +27,9 @@ const (
 	CACertFile = "ca.crt"
 	// ConfigFile is the optional tunables file read from the config directory.
 	ConfigFile = "buoy.yaml"
+	// AWGStateFile holds the node's AmneziaWG server identity — its keypair
+	// and obfuscation set. buoy generates it once and reuses it (DESIGN §3).
+	AWGStateFile = "awg-node.json"
 )
 
 // DefaultListenAddr is the TCP address the NodeControl server binds to. helm
@@ -65,6 +68,9 @@ func (c Config) NodeCertPath() string { return filepath.Join(c.Dir, NodeCertFile
 
 // CACertPath is the absolute path to the root CA trust anchor.
 func (c Config) CACertPath() string { return filepath.Join(c.Dir, CACertFile) }
+
+// AWGStatePath is the absolute path to the node's AmneziaWG identity file.
+func (c Config) AWGStatePath() string { return filepath.Join(c.Dir, AWGStateFile) }
 
 // defaults returns the universal configuration, so a node with no buoy.yaml
 // still has a complete, valid Config.

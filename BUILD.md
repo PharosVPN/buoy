@@ -52,7 +52,8 @@ request carries a `Protocol` enum field (`PROTOCOL_AMNEZIAWG`,
 Implement the server against the proto; do not fork it.
 
 - `GetStatus` — node + per-protocol service health (running, listening, peer
-  count).
+  count), plus the node's **AmneziaWG identity** (`amneziawg`): server public
+  key and obfuscation set — see *AmneziaWG obfuscation* below.
 - `GetMetrics` — counters for metrics sampling: per-peer rx/tx bytes, totals,
   handshakes, errors.
 - `PushConfig` — replace one protocol's data-plane config and reload it.
@@ -63,6 +64,28 @@ Implement the server against the proto; do not fork it.
 - `RestartService` — last-resort restart of one protocol's service.
 - `WatchEvents` — **server-stream**: handshake up/down, peer connect/disconnect,
   errors. `helm` holds this open; this is what makes the admin UI live.
+
+### AmneziaWG obfuscation
+
+`control.proto`'s `GetStatusResponse` carries `AmneziaWGInfo amneziawg = 4`
+(messages `AmneziaWGInfo` + `AmneziaWGObfuscation`). `helm` refuses to
+provision devices onto a node until it has these values, and hands the exact
+obfuscation set to every client of the node so `caravel` can build a tunnel
+that handshakes (DESIGN §3).
+
+Each node randomises **its own** obfuscation set — never fleet-wide:
+
+- `H1`-`H4` are four distinct magic headers, each ≥ 5 (1–4 are reserved for
+  AmneziaWG's standard packet types).
+- `Jmin < Jmax`; `Jc` is kept small (≈3–10) and `S1`-`S4` bounded (≈15–150) so
+  handshakes stay performant. `S2 ≠ S1+56` (else an init packet is
+  indistinguishable from a response packet). `I1`-`I5` are left empty.
+
+The set and the node's AmneziaWG keypair are generated once and persisted to
+`<config-dir>/awg-node.json` (`0600`), so the values stay **stable** across
+buoy restarts and `awg` reloads — `helm` caches them. The data-plane writer
+(milestone B2) renders them into the `[Interface]` section of `awg0.conf` and
+applies it; `GetStatus` reports the same persisted set.
 
 ### Data plane
 
@@ -82,10 +105,10 @@ obey the rebrand rule in `docs/BUILD.md` §4 (strip every origin identifier).
 
 | # | Output |
 |---|---|
-| B1 | Repo skeleton, config loader, the `gen-csr`/`run`/`version` commands, mTLS `NodeControl` gRPC server skeleton (RPCs return `Unimplemented`) |
-| B2 | AmneziaWG management: `PushConfig`, `AddPeer`/`RemovePeer`, `ListPeers` |
+| B1 | Repo skeleton, config loader, the `gen-csr`/`run`/`version` commands, mTLS `NodeControl` gRPC server skeleton (RPCs return `Unimplemented`). `GetStatus` is implemented early — it reports the per-node AmneziaWG identity + obfuscation set `helm` needs before it will provision devices. |
+| B2 | AmneziaWG management: `PushConfig`, `AddPeer`/`RemovePeer`, `ListPeers`; render the obfuscation set into `awg0.conf` `[Interface]` and apply |
 | B3 | XRay management: `PushConfig`, `AddPeer`/`RemovePeer`, `ListPeers` |
-| B4 | `GetStatus` + `GetMetrics` |
+| B4 | `GetStatus` service health + `GetMetrics` |
 | B5 | `WatchEvents` server-stream |
 | B6 | Cold-start-from-disk + cloud-init packaging (static binary) |
 

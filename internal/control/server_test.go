@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PharosVPN/buoy/internal/awg"
 	buoyv1 "github.com/PharosVPN/buoy/internal/gen/pharos/buoy/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -29,18 +30,15 @@ import (
 )
 
 // TestServeAcceptsMutualTLS proves a client whose certificate chains to the
-// CA reaches the service: every RPC is wired and returns Unimplemented in B1.
+// CA reaches the service, and that GetStatus reports the node's AmneziaWG
+// identity — the values helm needs before it will provision devices.
 func TestServeAcceptsMutualTLS(t *testing.T) {
 	ca := newTestCA(t)
 	dir := t.TempDir()
 	ca.writeNodeFiles(t, dir)
 	addr := freeAddr(t)
 
-	srv, err := NewServer(addr,
-		filepath.Join(dir, "node.crt"),
-		filepath.Join(dir, "node.key"),
-		filepath.Join(dir, "ca.crt"),
-		discardLogger())
+	srv, err := NewServer(testOptions(t, dir, addr))
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -56,9 +54,28 @@ func TestServeAcceptsMutualTLS(t *testing.T) {
 	})
 
 	conn := dial(t, addr, ca.clientCreds(t))
-	_, err = buoyv1.NewNodeControlClient(conn).GetStatus(context.Background(), &buoyv1.GetStatusRequest{})
+	resp, err := buoyv1.NewNodeControlClient(conn).GetStatus(context.Background(), &buoyv1.GetStatusRequest{})
+	if err != nil {
+		t.Fatalf("GetStatus over mTLS: %v", err)
+	}
+	if resp.GetAgentVersion() != "test-version" {
+		t.Errorf("agent_version = %q, want test-version", resp.GetAgentVersion())
+	}
+	awgInfo := resp.GetAmneziawg()
+	if awgInfo == nil {
+		t.Fatal("GetStatus returned no amneziawg info")
+	}
+	if awgInfo.GetPublicKey() == "" {
+		t.Error("amneziawg.public_key is empty")
+	}
+	if obf := awgInfo.GetObfuscation(); obf == nil || obf.GetJmin() >= obf.GetJmax() {
+		t.Errorf("amneziawg.obfuscation invalid: %+v", obf)
+	}
+
+	// Unimplemented RPCs still return a clean Unimplemented over mTLS.
+	_, err = buoyv1.NewNodeControlClient(conn).GetMetrics(context.Background(), &buoyv1.GetMetricsRequest{})
 	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("GetStatus over mTLS: got %v, want Unimplemented", err)
+		t.Errorf("GetMetrics: got %v, want Unimplemented", err)
 	}
 }
 
@@ -70,11 +87,7 @@ func TestServeRejectsNonMTLS(t *testing.T) {
 	ca.writeNodeFiles(t, dir)
 	addr := freeAddr(t)
 
-	srv, err := NewServer(addr,
-		filepath.Join(dir, "node.crt"),
-		filepath.Join(dir, "node.key"),
-		filepath.Join(dir, "ca.crt"),
-		discardLogger())
+	srv, err := NewServer(testOptions(t, dir, addr))
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -105,6 +118,24 @@ func TestServeRejectsNonMTLS(t *testing.T) {
 
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// testOptions builds Server options for a node whose mTLS files live in dir.
+func testOptions(t *testing.T, dir, addr string) Options {
+	t.Helper()
+	node, err := awg.Load(filepath.Join(dir, "awg-node.json"))
+	if err != nil {
+		t.Fatalf("awg.Load: %v", err)
+	}
+	return Options{
+		ListenAddr:   addr,
+		NodeCertPath: filepath.Join(dir, "node.crt"),
+		NodeKeyPath:  filepath.Join(dir, "node.key"),
+		CACertPath:   filepath.Join(dir, "ca.crt"),
+		Version:      "test-version",
+		AWGNode:      node,
+		Log:          discardLogger(),
+	}
 }
 
 func freeAddr(t *testing.T) string {
