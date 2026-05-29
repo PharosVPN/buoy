@@ -4,7 +4,7 @@
 // Package pki handles buoy's node-side certificate material: it generates the
 // node's mTLS keypair on the node and emits a certificate signing request.
 //
-// The node's private key is generated here and never leaves the node. helm
+// The node's private key is generated here and never leaves the node. coxswain
 // signs the CSR with the Fleet CA and pushes back the certificate and trust
 // anchor over SSH (DESIGN §5, decision 14).
 package pki
@@ -26,9 +26,9 @@ import (
 // owner. It never leaves the node.
 const keyFileMode = 0o600
 
-// CSR subject identifies the request as a buoy node certificate. helm pins the
+// CSR subject identifies the request as a buoy node certificate. coxswain pins the
 // node's reachable address as a SAN when it signs (see pki.SignNodeCSR in
-// helm); the CSR itself carries only this subject.
+// coxswain); the CSR itself carries only this subject.
 var csrSubject = pkix.Name{
 	CommonName:   "pharos-buoy-node",
 	Organization: []string{"PharosVPN"},
@@ -36,7 +36,7 @@ var csrSubject = pkix.Name{
 
 // CSRResult is the outcome of GenerateCSR.
 type CSRResult struct {
-	// CSRPEM is the PEM-encoded PKCS#10 certificate request, for helm to sign.
+	// CSRPEM is the PEM-encoded PKCS#10 certificate request, for coxswain to sign.
 	CSRPEM []byte
 	// KeyGenerated reports whether a new private key was created. It is false
 	// when an existing key at keyPath was reused.

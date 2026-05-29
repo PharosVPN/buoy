@@ -3,7 +3,7 @@
 
 // Package config defines buoy's configuration model and its loader.
 //
-// buoy holds no database. Its configuration is the config directory helm
+// buoy holds no database. Its configuration is the config directory coxswain
 // populated over SSH during onboarding (DESIGN §5) — the node keypair and the
 // trust anchors — plus a small set of tunables with safe defaults. An optional
 // buoy.yaml inside the config directory and BUOY_-prefixed environment
@@ -12,9 +12,9 @@ package config
 
 import "path/filepath"
 
-// On-node filenames within the config directory. helm's deploy package writes
+// On-node filenames within the config directory. coxswain's deploy package writes
 // node.crt and ca.crt to these exact paths over SSH, and `buoy gen-csr` writes
-// node.key — this is the helm↔buoy on-disk contract (see deploy.go).
+// node.key — this is the coxswain↔buoy on-disk contract (see deploy.go).
 const (
 	// NodeKeyFile holds the node's mTLS private key. It is generated on the
 	// node by `buoy gen-csr` and never leaves it.
@@ -35,8 +35,8 @@ const (
 	AWGRevisionFile = "awg-revision"
 )
 
-// DefaultListenAddr is the TCP address the NodeControl server binds to. helm
-// dials port 8444 on every node (DESIGN §2; helm deploy.ControlPort).
+// DefaultListenAddr is the TCP address the NodeControl server binds to. coxswain
+// dials port 8444 on every node (DESIGN §2; coxswain deploy.ControlPort).
 const DefaultListenAddr = ":8444"
 
 // Config is buoy's full runtime configuration.
@@ -51,7 +51,7 @@ type Config struct {
 	Log LogConfig `koanf:"log" yaml:"log"`
 }
 
-// ControlConfig configures the mTLS NodeControl gRPC server helm drives.
+// ControlConfig configures the mTLS NodeControl gRPC server coxswain drives.
 type ControlConfig struct {
 	// ListenAddr is the TCP address the server binds to.
 	ListenAddr string `koanf:"listen_addr" yaml:"listen_addr"`

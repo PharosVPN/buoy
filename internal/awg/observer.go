@@ -28,7 +28,7 @@ const subscriberBuffer = 256
 
 // Observer polls the AmneziaWG runtime, diffs the snapshot against the
 // previous one, and emits events to its subscribers. It is the single
-// source of truth for the cumulative counters helm sees on GetMetrics
+// source of truth for the cumulative counters coxswain sees on GetMetrics
 // (handshakes_total, errors_total) — the values only advance when this
 // loop observes an actual transition.
 type Observer struct {

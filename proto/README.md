@@ -2,9 +2,9 @@
 
 This directory holds a **vendored copy** of the protobuf contracts buoy
 implements. The canonical source is `docs/proto/` in the `PharosVPN/docs`
-repository; `helm` owns these schemas (DESIGN §6, helm/BUILD.md).
+repository; `coxswain` owns these schemas (DESIGN §6, coxswain/BUILD.md).
 
-`pharos/buoy/v1/control.proto` — the `NodeControl` service. helm is the gRPC
+`pharos/buoy/v1/control.proto` — the `NodeControl` service. coxswain is the gRPC
 client; buoy is the server. Do **not** edit it here: change it in `docs/proto/`,
 then re-vendor.
 

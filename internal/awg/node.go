@@ -23,7 +23,7 @@ const stateFileMode = 0o600
 
 // Node is a buoy node's AmneziaWG server identity: its WireGuard keypair and
 // its obfuscation parameter set. It is generated once and persisted, so the
-// values stay stable across buoy restarts and awg reloads — helm caches them.
+// values stay stable across buoy restarts and awg reloads — coxswain caches them.
 type Node struct {
 	priv        *ecdh.PrivateKey
 	obfuscation Obfuscation

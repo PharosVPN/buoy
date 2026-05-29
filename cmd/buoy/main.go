@@ -2,8 +2,8 @@
 // Copyright (C) 2026 The PharosVPN Authors
 
 // Command buoy is the PharosVPN VPN node agent. It runs on every public VPN
-// node, serves the mTLS NodeControl gRPC service helm drives, and applies only
-// the configuration helm pushes to it (DESIGN §3).
+// node, serves the mTLS NodeControl gRPC service coxswain drives, and applies only
+// the configuration coxswain pushes to it (DESIGN §3).
 package main
 
 import (

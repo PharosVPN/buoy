@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 The PharosVPN Authors
 
-// Package control is buoy's mTLS gRPC server: the NodeControl service helm
-// drives. buoy is the server and helm is the client — helm dials in over
-// outbound mTLS and buoy opens no connection to helm (DESIGN §2, §6).
+// Package control is buoy's mTLS gRPC server: the NodeControl service coxswain
+// drives. buoy is the server and coxswain is the client — coxswain dials in over
+// outbound mTLS and buoy opens no connection to coxswain (DESIGN §2, §6).
 //
 // The listener accepts only mTLS connections whose client certificate chains
 // to the root CA. Anything else is rejected at the TLS handshake — no banner,

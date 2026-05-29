@@ -24,7 +24,7 @@ const envPrefix = "BUOY_"
 // Load builds buoy's configuration for the given config directory. It layers,
 // in order: universal defaults, an optional buoy.yaml inside dir, then
 // BUOY_-prefixed environment overrides. The config file is optional — a node
-// onboarded by helm has none, and that is the normal case.
+// onboarded by coxswain has none, and that is the normal case.
 func Load(dir string) (Config, error) {
 	if dir == "" {
 		return Config{}, errors.New("config: config directory must not be empty")

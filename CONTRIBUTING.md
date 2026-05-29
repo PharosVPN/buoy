@@ -30,7 +30,7 @@ and email must be real and match your `git config user.name` / `user.email`.
 
 ## Wire contracts
 
-`buoy` implements protobuf contracts `helm` owns. `proto/` holds a vendored
+`buoy` implements protobuf contracts `coxswain` owns. `proto/` holds a vendored
 copy of `docs/proto/`; generated Go lives in `internal/gen/` and is committed.
 Never edit the generated code or the vendored proto in place — change the
 canonical schema in `docs/proto/`, re-vendor, and run `buf generate`. See

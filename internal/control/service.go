@@ -17,7 +17,7 @@ import (
 
 // service implements the NodeControl gRPC service.
 //
-// GetStatus reports the node's AmneziaWG identity (helm refuses to provision
+// GetStatus reports the node's AmneziaWG identity (coxswain refuses to provision
 // devices until it has it — DESIGN §3) and the AmneziaWG service health.
 // PushConfig, AddPeer, RemovePeer, ListPeers manage the AmneziaWG peer set
 // (B2). GetMetrics reports counters (B4) — totals from the conf+live join
@@ -81,8 +81,8 @@ func (s *service) GetStatus(ctx context.Context, _ *buoyv1.GetStatusRequest) (*b
 	}, nil
 }
 
-// WatchEvents streams live data-plane events to helm: handshake up/down,
-// peer connect/disconnect, observer errors. helm holds the stream open;
+// WatchEvents streams live data-plane events to coxswain: handshake up/down,
+// peer connect/disconnect, observer errors. coxswain holds the stream open;
 // this is what makes the admin UI live (DESIGN §7). The first events fire
 // once the observer has its baseline (one poll cycle after Manager.Start),
 // so a new stream on a quiet node may see no traffic until something
@@ -112,7 +112,7 @@ func (s *service) WatchEvents(_ *buoyv1.WatchEventsRequest, stream buoyv1.NodeCo
 //
 // The wire encoding of req.config is fixed by the proto comment:
 // PROTOCOL_AMNEZIAWG carries proto.Marshal of AmneziaWGConfig (decision: docs
-// PR #11 / helm PR #28). XRay's encoding lands in B3; other protocols are
+// PR #11 / coxswain PR #28). XRay's encoding lands in B3; other protocols are
 // Unimplemented. The node-level obfuscation parameters are deliberately not
 // in AmneziaWGConfig — buoy owns them (awg-node.json), and a request that
 // somehow carries them would be ignored.

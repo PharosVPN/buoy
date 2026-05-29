@@ -31,7 +31,7 @@ func TestLoadGeneratesAndPersists(t *testing.T) {
 	}
 }
 
-// TestLoadIsStable proves the identity survives a reload unchanged — helm
+// TestLoadIsStable proves the identity survives a reload unchanged — coxswain
 // caches it, so it must not drift across buoy restarts.
 func TestLoadIsStable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "awg-node.json")

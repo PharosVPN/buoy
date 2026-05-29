@@ -6,7 +6,7 @@
 //
 // Each node randomises its own obfuscation set — never fleet-wide — for
 // traffic diversity. The set is generated once, persisted, and reported to
-// helm via GetStatus; helm caches it and hands the exact values to every
+// coxswain via GetStatus; coxswain caches it and hands the exact values to every
 // client of the node, so caravel can build a tunnel that handshakes
 // (DESIGN §3).
 package awg

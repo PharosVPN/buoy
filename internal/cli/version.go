@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newVersionCmd prints the agent version to stdout. helm runs `buoy version`
+// newVersionCmd prints the agent version to stdout. coxswain runs `buoy version`
 // over SSH to record the installed agent version after an install or update.
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{

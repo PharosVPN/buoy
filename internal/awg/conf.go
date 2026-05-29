@@ -27,7 +27,7 @@ type ConfPeer struct {
 
 // renderConf produces an awg0.conf whose [Interface] block is sourced from
 // the node's persisted identity (private key + obfuscation set) and whose
-// [Peer] blocks come from peers. Any obfuscation values arriving from helm
+// [Peer] blocks come from peers. Any obfuscation values arriving from coxswain
 // in a PushConfig are ignored — buoy owns its obfuscation (DESIGN §3).
 func renderConf(n *Node, peers []ConfPeer) string {
 	var b strings.Builder

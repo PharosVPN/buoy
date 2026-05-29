@@ -16,7 +16,7 @@ import (
 )
 
 // newRunCmd runs the buoy agent: it serves the mTLS NodeControl gRPC service
-// helm drives. helm installs this as the buoy.service systemd unit, invoked as
+// coxswain drives. coxswain installs this as the buoy.service systemd unit, invoked as
 // `buoy run --config-dir /etc/buoy`.
 func newRunCmd() *cobra.Command {
 	var configDir string
@@ -38,7 +38,7 @@ func newRunCmd() *cobra.Command {
 				"listen_addr", cfg.Control.ListenAddr)
 
 			// The node's AmneziaWG identity is generated on first run and
-			// reused thereafter, so the obfuscation set helm caches stays
+			// reused thereafter, so the obfuscation set coxswain caches stays
 			// stable across restarts (DESIGN §3).
 			awgNode, err := awg.Load(cfg.AWGStatePath())
 			if err != nil {

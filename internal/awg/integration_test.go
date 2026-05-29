@@ -14,7 +14,7 @@ import (
 )
 
 // TestLiveAmneziaWG drives the Manager against a real `awg`/`awg-quick`
-// pipeline. It exercises the full helm→buoy data-plane handoff that B2 is
+// pipeline. It exercises the full coxswain→buoy data-plane handoff that B2 is
 // the unblocker for: PushConfig brings the interface up; ListPeers shows the
 // pushed peers; AddPeer mutates live state; RemovePeer reverts it.
 //

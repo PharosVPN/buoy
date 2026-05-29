@@ -31,7 +31,7 @@ import (
 
 // TestServeAcceptsMutualTLS proves a client whose certificate chains to the
 // CA reaches the service, and that GetStatus reports the node's AmneziaWG
-// identity — the values helm needs before it will provision devices.
+// identity — the values coxswain needs before it will provision devices.
 func TestServeAcceptsMutualTLS(t *testing.T) {
 	ca := newTestCA(t)
 	dir := t.TempDir()
@@ -267,7 +267,7 @@ func (ca *testCA) leaf(t *testing.T, cn string, eku x509.ExtKeyUsage, ips []net.
 		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 }
 
-// writeNodeFiles writes node.crt, node.key and ca.crt into dir, as helm's
+// writeNodeFiles writes node.crt, node.key and ca.crt into dir, as coxswain's
 // onboarding would.
 func (ca *testCA) writeNodeFiles(t *testing.T, dir string) {
 	t.Helper()
@@ -286,7 +286,7 @@ func (ca *testCA) writeNodeFiles(t *testing.T, dir string) {
 // clientCreds builds mTLS credentials for a controller-style client.
 func (ca *testCA) clientCreds(t *testing.T) credentials.TransportCredentials {
 	t.Helper()
-	certPEM, keyPEM := ca.leaf(t, "helm-controller", x509.ExtKeyUsageClientAuth, nil)
+	certPEM, keyPEM := ca.leaf(t, "coxswain-controller", x509.ExtKeyUsageClientAuth, nil)
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		t.Fatal(err)

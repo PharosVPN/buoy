@@ -15,7 +15,7 @@ import (
 // newGenCSRCmd generates the node's mTLS keypair on the node and prints a
 // PEM-encoded certificate signing request to stdout.
 //
-// This is the first step of SSH onboarding (DESIGN §5, decision 14): helm runs
+// This is the first step of SSH onboarding (DESIGN §5, decision 14): coxswain runs
 // `buoy gen-csr` over SSH, captures the CSR from stdout, signs it with the
 // Fleet CA, and pushes node.crt and ca.crt back. The node's private key is
 // written to node.key and never leaves the node.
@@ -26,7 +26,7 @@ func newGenCSRCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "gen-csr",
-		Short: "Generate the node keypair and print a CSR for helm to sign",
+		Short: "Generate the node keypair and print a CSR for coxswain to sign",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			keyPath := filepath.Join(configDir, config.NodeKeyFile)
@@ -35,7 +35,7 @@ func newGenCSRCmd() *cobra.Command {
 				return err
 			}
 
-			// Diagnostics go to stderr; stdout carries only the CSR so helm
+			// Diagnostics go to stderr; stdout carries only the CSR so coxswain
 			// can capture it cleanly over SSH. A failed diagnostic write must
 			// not fail gen-csr itself.
 			if res.KeyGenerated {

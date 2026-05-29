@@ -12,7 +12,7 @@ import (
 )
 
 // run executes the buoy CLI with args, returning stdout and stderr separately —
-// helm captures gen-csr's stdout over SSH, so the split matters.
+// coxswain captures gen-csr's stdout over SSH, so the split matters.
 func run(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
@@ -43,7 +43,7 @@ func TestGenCSRCommand(t *testing.T) {
 	if !strings.HasPrefix(stdout, "-----BEGIN CERTIFICATE REQUEST-----") {
 		t.Errorf("gen-csr stdout is not a CSR PEM block:\n%s", stdout)
 	}
-	// Diagnostics must stay off stdout so helm captures only the CSR.
+	// Diagnostics must stay off stdout so coxswain captures only the CSR.
 	if !strings.Contains(stderr, "node key") {
 		t.Errorf("gen-csr stderr = %q, want a node-key diagnostic", stderr)
 	}

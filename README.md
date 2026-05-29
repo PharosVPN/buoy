@@ -14,12 +14,12 @@ Part of the [PharosVPN](https://github.com/PharosVPN) platform — see
 
 - **Public IP.** Terminates end-user tunnels on UDP 443 (AmneziaWG) and TCP 443
   (XRay / VLESS+REALITY).
-- **Stateless except for what `helm` gave it.** All config is written to disk
+- **Stateless except for what `coxswain` gave it.** All config is written to disk
   only after the controller pushes it over a validated mTLS connection.
 - **Control port.** Listens for the controller's mTLS/gRPC connection: status,
   metrics, config push, live peer add/remove, service restart — and streams
   live events back.
-- **SSH is install-only.** `helm` reaches a node over SSH solely to install and
+- **SSH is install-only.** `coxswain` reaches a node over SSH solely to install and
   update the agent (DESIGN §5); every operational instruction is gRPC.
 - **Cold-start resilient.** Comes up from disk every boot; controller offline ⇒
   existing tunnels keep working.
