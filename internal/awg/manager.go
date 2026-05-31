@@ -34,11 +34,20 @@ const (
 
 // ManagerOptions configures a Manager.
 type ManagerOptions struct {
-	// Node is the persisted AmneziaWG identity (keypair + obfuscation).
+	// Interface is the wg interface name (e.g. "awg0"); empty means "awg0".
+	Interface string
+	// Node is the persisted AmneziaWG identity (keypair + obfuscation). For
+	// the client interface (awg0) it supplies the [Interface] block. Either
+	// Node or Spec must be set; Spec wins when both are present (a cascade
+	// inner link sets Spec explicitly).
 	Node *Node
+	// Spec overrides the [Interface] block for this interface. Used for cascade
+	// inner links, which reuse the node key but carry the exit's port and
+	// obfuscation.
+	Spec *InterfaceSpec
 	// Runtime is the awg/awg-quick driver; tests substitute a fake.
 	Runtime Runtime
-	// ConfPath is the awg0.conf path; empty means DefaultConfPath.
+	// ConfPath is the conf path for this interface; empty means DefaultConfPath.
 	ConfPath string
 	// RevisionPath persists the last applied PushConfig revision across
 	// restarts; required.
@@ -58,7 +67,8 @@ type ManagerOptions struct {
 // WatchEvents and accumulates GetMetrics counters. All mutations are
 // serialised.
 type Manager struct {
-	node         *Node
+	iface        string
+	spec         InterfaceSpec
 	runtime      Runtime
 	confPath     string
 	revisionPath string
@@ -72,8 +82,14 @@ type Manager struct {
 // ready to serve. It does not bring the interface up; that happens on the
 // first PushConfig.
 func NewManager(opts ManagerOptions) (*Manager, error) {
-	if opts.Node == nil {
-		return nil, errors.New("awg: Manager needs a Node")
+	var spec InterfaceSpec
+	switch {
+	case opts.Spec != nil:
+		spec = *opts.Spec
+	case opts.Node != nil:
+		spec = opts.Node.Spec()
+	default:
+		return nil, errors.New("awg: Manager needs a Node or a Spec")
 	}
 	if opts.Runtime == nil {
 		return nil, errors.New("awg: Manager needs a Runtime")
@@ -81,12 +97,17 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 	if opts.RevisionPath == "" {
 		return nil, errors.New("awg: Manager needs a RevisionPath")
 	}
+	iface := opts.Interface
+	if iface == "" {
+		iface = "awg0"
+	}
 	confPath := opts.ConfPath
 	if confPath == "" {
 		confPath = DefaultConfPath
 	}
 	m := &Manager{
-		node:         opts.Node,
+		iface:        iface,
+		spec:         spec,
 		runtime:      opts.Runtime,
 		confPath:     confPath,
 		revisionPath: opts.RevisionPath,
@@ -127,6 +148,25 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	return m.applyConf(ctx)
 }
 
+// Down tears this interface down and removes its persisted conf and revision —
+// used to deprovision a cascade inner link. It is idempotent: a missing
+// interface or files are not errors.
+func (m *Manager) Down(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.runtime.Down(ctx, m.confPath); err != nil {
+		return err
+	}
+	for _, p := range []string{m.confPath, m.revisionPath} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("awg: remove %s: %w", p, err)
+		}
+	}
+	m.appliedRevision = 0
+	return nil
+}
+
 // Start launches the polling observer in the background; it runs until ctx
 // cancels. Subscribers (WatchEvents streams) registered before Start get the
 // first poll's events too, but the first poll itself establishes the
@@ -141,6 +181,9 @@ func (m *Manager) Start(ctx context.Context) {
 func (m *Manager) Subscribe() (<-chan *buoyv1.Event, func()) {
 	return m.observer.Subscribe()
 }
+
+// Interface returns the wg interface name this Manager owns (e.g. "awg0").
+func (m *Manager) Interface() string { return m.iface }
 
 // AppliedRevision returns the last successfully applied PushConfig revision.
 func (m *Manager) AppliedRevision() int64 {
@@ -369,7 +412,7 @@ func (m *Manager) writeConf(peers []ConfPeer) error {
 			return fmt.Errorf("awg: create %s: %w", dir, err)
 		}
 	}
-	body := renderConf(m.node, peers)
+	body := renderConf(m.spec, peers)
 	tmp := m.confPath + ".tmp"
 	if err := os.WriteFile(tmp, []byte(body), confFileMode); err != nil {
 		return fmt.Errorf("awg: write %s: %w", tmp, err)

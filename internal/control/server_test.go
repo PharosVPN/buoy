@@ -168,7 +168,7 @@ func testOptions(t *testing.T, dir, addr string) Options {
 		CACertPath:   filepath.Join(dir, "ca.crt"),
 		Version:      "test-version",
 		AWGNode:      node,
-		AWGManager:   mgr,
+		AWGRegistry:  awg.NewRegistry(mgr),
 		NetPolicy:    netPol,
 		Log:          discardLogger(),
 	}
@@ -180,6 +180,7 @@ func testOptions(t *testing.T, dir, addr string) Options {
 type stubRuntime struct{}
 
 func (stubRuntime) Up(context.Context, string) error       { return nil }
+func (stubRuntime) Down(context.Context, string) error     { return nil }
 func (stubRuntime) SyncConf(context.Context, string) error { return nil }
 func (stubRuntime) AddPeer(context.Context, string, string, []string, string) error {
 	return nil

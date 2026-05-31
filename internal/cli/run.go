@@ -63,6 +63,10 @@ func newRunCmd() *cobra.Command {
 				"conf_path", awg.DefaultConfPath,
 				"applied_revision", awgManager.AppliedRevision())
 
+			// The registry owns awg0 (clients) plus any cascade inner-link
+			// interfaces the controller provisions at runtime (DESIGN §3).
+			awgReg := awg.NewRegistry(awgManager)
+
 			// The network-policy applier owns the node's forwarding /
 			// masquerade / isolation firewall state (decision 16).
 			netPolicy, err := netpolicy.New(netpolicy.Options{
@@ -83,7 +87,7 @@ func newRunCmd() *cobra.Command {
 				CACertPath:   cfg.CACertPath(),
 				Version:      version,
 				AWGNode:      awgNode,
-				AWGManager:   awgManager,
+				AWGRegistry:  awgReg,
 				NetPolicy:    netPolicy,
 				Log:          log,
 			})

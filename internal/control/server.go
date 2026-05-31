@@ -48,9 +48,10 @@ type Options struct {
 	Version string
 	// AWGNode is the node's AmneziaWG identity, reported by GetStatus.
 	AWGNode *awg.Node
-	// AWGManager owns the AmneziaWG data plane (awg0.conf, live state) and
-	// backs AddPeer / RemovePeer / ListPeers and the AmneziaWG ServiceStatus.
-	AWGManager *awg.Manager
+	// AWGRegistry owns the node's AmneziaWG interfaces — the awg0 client
+	// interface (which backs AddPeer / RemovePeer / ListPeers and the
+	// ServiceStatus) plus any cascade inner-link interfaces.
+	AWGRegistry *awg.Registry
 	// NetPolicy applies the node's forwarding / masquerade / isolation policy
 	// and backs SetNetworkConfig (decision 16).
 	NetPolicy *netpolicy.Applier
@@ -67,7 +68,7 @@ func NewServer(opts Options) (*Server, error) {
 	}
 
 	gs := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsCfg)))
-	buoyv1.RegisterNodeControlServer(gs, newService(opts.Version, opts.AWGNode, opts.AWGManager, opts.NetPolicy))
+	buoyv1.RegisterNodeControlServer(gs, newService(opts.Version, opts.AWGNode, opts.AWGRegistry, opts.NetPolicy))
 
 	return &Server{addr: opts.ListenAddr, grpc: gs, log: opts.Log}, nil
 }

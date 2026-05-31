@@ -16,7 +16,7 @@ func TestRenderConfMatchesInterfaceAndPeers(t *testing.T) {
 		{PublicKey: "PEERB=", AllowedIPs: []string{"10.0.0.3/32", "fd00::3/128"}},
 	}
 
-	conf := renderConf(node, peers)
+	conf := renderConf(node.Spec(), peers)
 
 	// [Interface] carries the node's private key, port, MTU and obfuscation.
 	wantInterface := []string{
@@ -59,7 +59,7 @@ func TestParseConfPeersRoundTrip(t *testing.T) {
 		{PublicKey: "B=", AllowedIPs: []string{"10.0.0.3/32"}},
 	}
 
-	parsed, err := parseConfPeers([]byte(renderConf(node, original)))
+	parsed, err := parseConfPeers([]byte(renderConf(node.Spec(), original)))
 	if err != nil {
 		t.Fatalf("parseConfPeers: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestRenderConfInnerLinkEndpoint(t *testing.T) {
 		{PublicKey: "EXIT=", AllowedIPs: []string{"0.0.0.0/0"}, Endpoint: "203.0.113.7:443"},
 	}
 
-	conf := renderConf(node, peers)
+	conf := renderConf(node.Spec(), peers)
 	if !strings.Contains(conf, "Endpoint = 203.0.113.7:443") {
 		t.Errorf("inner-link Endpoint missing from conf:\n%s", conf)
 	}

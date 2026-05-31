@@ -24,6 +24,9 @@ type Runtime interface {
 	// (`awg-quick up`). Calling Up when the interface already exists is an
 	// error — callers use SyncConf to live-reload.
 	Up(ctx context.Context, confPath string) error
+	// Down tears the interface down (`awg-quick down`). Bringing down an
+	// interface that is not up is not an error.
+	Down(ctx context.Context, confPath string) error
 	// SyncConf live-reloads awg0 from confPath without dropping established
 	// tunnels: `awg-quick strip <conf> | awg syncconf awg0 /dev/stdin`.
 	SyncConf(ctx context.Context, confPath string) error
@@ -98,6 +101,29 @@ func (r *ExecRuntime) Up(ctx context.Context, confPath string) error {
 			confPath, err, redactOutput(out))
 	}
 	return nil
+}
+
+// Down runs `awg-quick down <confPath>`. Bringing down an interface that is
+// not present is tolerated (treated as success).
+func (r *ExecRuntime) Down(ctx context.Context, confPath string) error {
+	cmd := exec.CommandContext(ctx, r.awgQuick(), "down", confPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// awg-quick down on a missing interface exits non-zero; do not treat
+		// that as fatal — teardown is idempotent.
+		if !r.Exists(ctx) {
+			return nil
+		}
+		return fmt.Errorf("awg-quick down %s: %w (output: %s)",
+			confPath, err, redactOutput(out))
+	}
+	return nil
+}
+
+// Exists reports whether the interface is currently present.
+func (r *ExecRuntime) Exists(ctx context.Context) bool {
+	up, _ := r.Listening(ctx)
+	return up
 }
 
 // SyncConf live-reloads the interface: it strips awg-quick-only directives

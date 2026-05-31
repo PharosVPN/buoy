@@ -138,6 +138,19 @@ func (n *Node) Info() *buoyv1.AmneziaWGInfo {
 	}
 }
 
+// Spec returns the node's own [Interface] inputs for the client interface
+// (awg0): its private key, the standard listen port and MTU, and its
+// obfuscation lines. A cascade inner link builds a different InterfaceSpec
+// (this node's key, but the exit node's port and obfuscation).
+func (n *Node) Spec() InterfaceSpec {
+	return InterfaceSpec{
+		PrivateKey:  n.PrivateKey(),
+		ListenPort:  ListenPort,
+		MTU:         MTU,
+		Obfuscation: n.RenderInterface(),
+	}
+}
+
 // RenderInterface renders the obfuscation parameters as the lines buoy adds to
 // the [Interface] section of awg0.conf. The data-plane writer that applies
 // awg0.conf (milestone B2) uses this so the served config matches exactly what

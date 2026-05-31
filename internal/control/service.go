@@ -29,23 +29,28 @@ import (
 type service struct {
 	buoyv1.UnimplementedNodeControlServer
 
-	version    string
-	started    time.Time
-	awgNode    *awg.Node
-	awgManager *awg.Manager
-	netPolicy  *netpolicy.Applier
+	version   string
+	started   time.Time
+	awgNode   *awg.Node
+	awgReg    *awg.Registry
+	netPolicy *netpolicy.Applier
 }
 
 // newService returns a NodeControl service implementation.
-func newService(version string, awgNode *awg.Node, awgManager *awg.Manager, netPolicy *netpolicy.Applier) *service {
+func newService(version string, awgNode *awg.Node, awgReg *awg.Registry, netPolicy *netpolicy.Applier) *service {
 	return &service{
-		version:    version,
-		started:    time.Now(),
-		awgNode:    awgNode,
-		awgManager: awgManager,
-		netPolicy:  netPolicy,
+		version:   version,
+		started:   time.Now(),
+		awgNode:   awgNode,
+		awgReg:    awgReg,
+		netPolicy: netPolicy,
 	}
 }
+
+// primary is the client-interface (awg0) data-plane manager. The current
+// NodeControl RPCs operate on it; cascade inner-link interfaces in the registry
+// are provisioned out of band (DESIGN §3) and not yet addressed per-RPC.
+func (s *service) primary() *awg.Manager { return s.awgReg.Primary() }
 
 // GetMetrics reports the data plane's current counters. AmneziaWG metrics
 // come from the same conf+live correlation as ListPeers, with summed totals.
@@ -53,7 +58,7 @@ func newService(version string, awgNode *awg.Node, awgManager *awg.Manager, netP
 // that also feeds WatchEvents — they stay at zero in B4. XRay metrics land
 // in B3.
 func (s *service) GetMetrics(ctx context.Context, _ *buoyv1.GetMetricsRequest) (*buoyv1.GetMetricsResponse, error) {
-	snap, err := s.awgManager.Metrics(ctx)
+	snap, err := s.primary().Metrics(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "GetMetrics: %v", err)
 	}
@@ -69,7 +74,7 @@ func (s *service) GetMetrics(ctx context.Context, _ *buoyv1.GetMetricsRequest) (
 // GetStatus reports the node's agent version, uptime, the AmneziaWG server
 // identity, and per-protocol service health.
 func (s *service) GetStatus(ctx context.Context, _ *buoyv1.GetStatusRequest) (*buoyv1.GetStatusResponse, error) {
-	running, listening, peerCount, detail := s.awgManager.Status(ctx)
+	running, listening, peerCount, detail := s.primary().Status(ctx)
 	return &buoyv1.GetStatusResponse{
 		AgentVersion:  s.version,
 		UptimeSeconds: int64(time.Since(s.started).Seconds()),
@@ -91,7 +96,7 @@ func (s *service) GetStatus(ctx context.Context, _ *buoyv1.GetStatusRequest) (*b
 // so a new stream on a quiet node may see no traffic until something
 // changes — that's expected.
 func (s *service) WatchEvents(_ *buoyv1.WatchEventsRequest, stream buoyv1.NodeControl_WatchEventsServer) error {
-	events, cancel := s.awgManager.Subscribe()
+	events, cancel := s.primary().Subscribe()
 	defer cancel()
 
 	ctx := stream.Context()
@@ -145,7 +150,7 @@ func (s *service) PushConfig(ctx context.Context, req *buoyv1.PushConfigRequest)
 		})
 	}
 
-	applied, reloaded, err := s.awgManager.PushConfig(ctx, req.GetRevision(), peers)
+	applied, reloaded, err := s.primary().PushConfig(ctx, req.GetRevision(), peers)
 	if err != nil {
 		var stale awg.ErrStaleRevision
 		if errors.As(err, &stale) {
@@ -171,7 +176,7 @@ func (s *service) AddPeer(ctx context.Context, req *buoyv1.AddPeerRequest) (*buo
 		return nil, status.Errorf(codes.Unimplemented,
 			"AddPeer: protocol %s not yet implemented", peer.GetProtocol())
 	}
-	applied, err := s.awgManager.AddPeer(ctx, peer)
+	applied, err := s.primary().AddPeer(ctx, peer)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "AddPeer: %v", err)
 	}
@@ -187,7 +192,7 @@ func (s *service) RemovePeer(ctx context.Context, req *buoyv1.RemovePeerRequest)
 	if req.GetPublicKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "RemovePeer: missing public_key")
 	}
-	applied, err := s.awgManager.RemovePeer(ctx, req.GetPublicKey())
+	applied, err := s.primary().RemovePeer(ctx, req.GetPublicKey())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "RemovePeer: %v", err)
 	}
@@ -228,7 +233,7 @@ func (s *service) ListPeers(ctx context.Context, req *buoyv1.ListPeersRequest) (
 		return nil, status.Errorf(codes.Unimplemented,
 			"ListPeers: protocol %s not yet implemented", req.GetProtocol())
 	}
-	peers, err := s.awgManager.ListPeers(ctx)
+	peers, err := s.primary().ListPeers(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ListPeers: %v", err)
 	}

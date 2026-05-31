@@ -42,6 +42,15 @@ func (r *fakeRuntime) Up(_ context.Context, confPath string) error {
 	return r.reloadLocked()
 }
 
+func (r *fakeRuntime) Down(_ context.Context, _ string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.listening = false
+	r.live = map[string]LivePeer{}
+	r.calls = append(r.calls, "Down")
+	return nil
+}
+
 func (r *fakeRuntime) SyncConf(_ context.Context, confPath string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -332,7 +341,7 @@ func TestPushConfigAppliesAndPersistsRevision(t *testing.T) {
 
 	// Persisted across "restart".
 	mgr2, err := NewManager(ManagerOptions{
-		Node:         mgr.node,
+		Spec:         &mgr.spec,
 		Runtime:      rt,
 		ConfPath:     mgr.confPath,
 		RevisionPath: mgr.revisionPath,

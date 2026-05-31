@@ -10,12 +10,32 @@ import (
 	"strings"
 )
 
-// AmneziaWG data-plane defaults. The interface always binds to UDP 443
+// AmneziaWG data-plane defaults. The client interface (awg0) binds to UDP 443
 // (DESIGN §3); MTU 1420 is the WireGuard default.
 const (
 	ListenPort uint16 = 443
 	MTU        uint16 = 1420
 )
+
+// InterfaceSpec is the input for one wg interface's [Interface] block. The
+// client interface (awg0) uses the node's own spec (key, port 443, the node's
+// obfuscation). A cascade inner link reuses the node's key but carries the far
+// (exit) node's listen port and obfuscation, so its handshake to that node
+// matches (DESIGN §3). Obfuscation is the pre-rendered AmneziaWG lines.
+type InterfaceSpec struct {
+	PrivateKey  string
+	ListenPort  uint16
+	MTU         uint16
+	Obfuscation string
+}
+
+// mtuOrDefault returns the spec MTU, or the package default when unset.
+func (s InterfaceSpec) mtuOrDefault() uint16 {
+	if s.MTU == 0 {
+		return MTU
+	}
+	return s.MTU
+}
 
 // ConfPeer is one [Peer] section of awg0.conf, as buoy writes it.
 //
@@ -30,18 +50,18 @@ type ConfPeer struct {
 	Endpoint     string
 }
 
-// renderConf produces an awg0.conf whose [Interface] block is sourced from
-// the node's persisted identity (private key + obfuscation set) and whose
-// [Peer] blocks come from peers. Any obfuscation values arriving from coxswain
-// in a PushConfig are ignored — buoy owns its obfuscation (DESIGN §3).
-func renderConf(n *Node, peers []ConfPeer) string {
+// renderConf produces a conf whose [Interface] block is sourced from spec
+// (private key + listen port + obfuscation) and whose [Peer] blocks come from
+// peers. Any obfuscation values arriving from coxswain in a PushConfig are
+// ignored — buoy owns its obfuscation (DESIGN §3); spec is built on the node.
+func renderConf(spec InterfaceSpec, peers []ConfPeer) string {
 	var b strings.Builder
 	b.WriteString("# Managed by buoy — edits will be overwritten.\n")
 	b.WriteString("[Interface]\n")
-	fmt.Fprintf(&b, "PrivateKey = %s\n", n.PrivateKey())
-	fmt.Fprintf(&b, "ListenPort = %d\n", ListenPort)
-	fmt.Fprintf(&b, "MTU = %d\n", MTU)
-	b.WriteString(n.RenderInterface())
+	fmt.Fprintf(&b, "PrivateKey = %s\n", spec.PrivateKey)
+	fmt.Fprintf(&b, "ListenPort = %d\n", spec.ListenPort)
+	fmt.Fprintf(&b, "MTU = %d\n", spec.mtuOrDefault())
+	b.WriteString(spec.Obfuscation)
 
 	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")
