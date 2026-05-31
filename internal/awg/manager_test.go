@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -20,11 +21,12 @@ import (
 type fakeRuntime struct {
 	mu sync.Mutex
 
-	listening bool
-	confPath  string
-	live      map[string]LivePeer
-	calls     []string
-	showErr   error // injected; non-nil → Show returns this error
+	listening    bool
+	confPath     string
+	live         map[string]LivePeer
+	calls        []string
+	showErr      error  // injected; non-nil → Show returns this error
+	lastEndpoint string // endpoint passed to the most recent AddPeer
 }
 
 func newFakeRuntime() *fakeRuntime {
@@ -48,10 +50,11 @@ func (r *fakeRuntime) SyncConf(_ context.Context, confPath string) error {
 	return r.reloadLocked()
 }
 
-func (r *fakeRuntime) AddPeer(_ context.Context, publicKey, _ string, allowedIPs []string) error {
+func (r *fakeRuntime) AddPeer(_ context.Context, publicKey, _ string, allowedIPs []string, endpoint string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.calls = append(r.calls, "AddPeer:"+publicKey)
+	r.lastEndpoint = endpoint
 	// preserve any prior byte counters
 	prev := r.live[publicKey]
 	prev.PublicKey = publicKey
@@ -193,6 +196,33 @@ func TestAddPeerWritesConfAndCallsRuntime(t *testing.T) {
 	}
 	if len(peers) != 1 || peers[0].PublicKey != "PUBA=" {
 		t.Errorf("conf peers = %+v, want one PUBA=", peers)
+	}
+}
+
+// TestAddPeerCarriesInnerLinkEndpoint proves a peer with an endpoint (an inner
+// link toward an exit node) reaches both the live runtime and the persisted
+// conf — the cascade primitive end to end through the manager.
+func TestAddPeerCarriesInnerLinkEndpoint(t *testing.T) {
+	mgr, rt := newTestManager(t)
+	p := &buoyv1.Peer{
+		Id:         "exit-link",
+		Protocol:   buoyv1.Protocol_PROTOCOL_AMNEZIAWG,
+		PublicKey:  "EXIT=",
+		AllowedIps: []string{"0.0.0.0/0"},
+		Endpoints:  []string{"203.0.113.7:443"},
+	}
+	if _, err := mgr.AddPeer(context.Background(), p); err != nil {
+		t.Fatalf("AddPeer: %v", err)
+	}
+	if rt.lastEndpoint != "203.0.113.7:443" {
+		t.Errorf("runtime got endpoint %q, want 203.0.113.7:443", rt.lastEndpoint)
+	}
+	raw, err := os.ReadFile(mgr.confPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "Endpoint = 203.0.113.7:443") {
+		t.Errorf("conf missing inner-link endpoint:\n%s", raw)
 	}
 }
 

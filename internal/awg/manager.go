@@ -197,12 +197,13 @@ func (m *Manager) AddPeer(ctx context.Context, p *buoyv1.Peer) (bool, error) {
 		PublicKey:    p.GetPublicKey(),
 		PresharedKey: p.GetPresharedKey(),
 		AllowedIPs:   append([]string(nil), p.GetAllowedIps()...),
+		Endpoint:     FirstEndpoint(p.GetEndpoints()),
 	}
 	peers = upsertPeer(peers, cp)
 	if err := m.writeConf(peers); err != nil {
 		return false, err
 	}
-	if err := m.runtime.AddPeer(ctx, cp.PublicKey, cp.PresharedKey, cp.AllowedIPs); err != nil {
+	if err := m.runtime.AddPeer(ctx, cp.PublicKey, cp.PresharedKey, cp.AllowedIPs, cp.Endpoint); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -256,14 +257,16 @@ func (m *Manager) ListPeers(ctx context.Context) ([]*buoyv1.PeerState, error) {
 
 	out := make([]*buoyv1.PeerState, 0, len(confPeers))
 	for _, cp := range confPeers {
-		ps := &buoyv1.PeerState{
-			Peer: &buoyv1.Peer{
-				Protocol:     buoyv1.Protocol_PROTOCOL_AMNEZIAWG,
-				PublicKey:    cp.PublicKey,
-				PresharedKey: cp.PresharedKey,
-				AllowedIps:   append([]string(nil), cp.AllowedIPs...),
-			},
+		peer := &buoyv1.Peer{
+			Protocol:     buoyv1.Protocol_PROTOCOL_AMNEZIAWG,
+			PublicKey:    cp.PublicKey,
+			PresharedKey: cp.PresharedKey,
+			AllowedIps:   append([]string(nil), cp.AllowedIPs...),
 		}
+		if cp.Endpoint != "" {
+			peer.Endpoints = []string{cp.Endpoint}
+		}
+		ps := &buoyv1.PeerState{Peer: peer}
 		if lp, ok := byKey[cp.PublicKey]; ok {
 			ps.RxBytes = lp.RxBytes
 			ps.TxBytes = lp.TxBytes
@@ -375,6 +378,18 @@ func (m *Manager) writeConf(peers []ConfPeer) error {
 		return fmt.Errorf("awg: replace %s: %w", m.confPath, err)
 	}
 	return nil
+}
+
+// FirstEndpoint returns the first endpoint from the proto's repeated endpoints
+// field, or "". The wire allows multiple (decision 17, anti-correlation), but an
+// awg [Peer] dials exactly one; selecting among several is a later concern.
+func FirstEndpoint(endpoints []string) string {
+	for _, e := range endpoints {
+		if e != "" {
+			return e
+		}
+	}
+	return ""
 }
 
 // upsertPeer replaces an existing peer with the same public key, otherwise

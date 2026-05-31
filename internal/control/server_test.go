@@ -181,7 +181,7 @@ type stubRuntime struct{}
 
 func (stubRuntime) Up(context.Context, string) error       { return nil }
 func (stubRuntime) SyncConf(context.Context, string) error { return nil }
-func (stubRuntime) AddPeer(context.Context, string, string, []string) error {
+func (stubRuntime) AddPeer(context.Context, string, string, []string, string) error {
 	return nil
 }
 func (stubRuntime) RemovePeer(context.Context, string) error     { return nil }

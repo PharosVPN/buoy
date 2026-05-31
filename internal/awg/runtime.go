@@ -29,8 +29,10 @@ type Runtime interface {
 	SyncConf(ctx context.Context, confPath string) error
 	// AddPeer adds one peer live. presharedKey, when non-empty, is piped on
 	// stdin — never on argv. allowedIPs are joined into one comma-separated
-	// argument as `awg set` expects.
-	AddPeer(ctx context.Context, publicKey, presharedKey string, allowedIPs []string) error
+	// argument as `awg set` expects. endpoint, when non-empty, sets where this
+	// node dials the peer (a node→node inner link); it is empty for client
+	// peers, which dial the node.
+	AddPeer(ctx context.Context, publicKey, presharedKey string, allowedIPs []string, endpoint string) error
 	// RemovePeer removes one peer live. Removing a peer that is not on the
 	// interface is not an error.
 	RemovePeer(ctx context.Context, publicKey string) error
@@ -116,14 +118,18 @@ func (r *ExecRuntime) SyncConf(ctx context.Context, confPath string) error {
 	return nil
 }
 
-// AddPeer adds one peer live. The PSK, when present, is piped on stdin.
-func (r *ExecRuntime) AddPeer(ctx context.Context, publicKey, presharedKey string, allowedIPs []string) error {
+// AddPeer adds one peer live. The PSK, when present, is piped on stdin. An
+// endpoint, when present, tells awg where to dial the peer (inner link).
+func (r *ExecRuntime) AddPeer(ctx context.Context, publicKey, presharedKey string, allowedIPs []string, endpoint string) error {
 	if publicKey == "" {
 		return errors.New("awg: AddPeer requires a public key")
 	}
 	args := []string{"set", r.iface(), "peer", publicKey}
 	if presharedKey != "" {
 		args = append(args, "preshared-key", "/dev/stdin")
+	}
+	if endpoint != "" {
+		args = append(args, "endpoint", endpoint)
 	}
 	args = append(args, "allowed-ips", strings.Join(allowedIPs, ","))
 

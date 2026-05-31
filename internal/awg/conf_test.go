@@ -80,6 +80,43 @@ func TestParseConfPeersRoundTrip(t *testing.T) {
 	}
 }
 
+// TestRenderConfInnerLinkEndpoint proves a node→node inner-link peer (the
+// cascade primitive) carries its Endpoint through render and parse, while
+// client peers in the same conf stay endpoint-free.
+func TestRenderConfInnerLinkEndpoint(t *testing.T) {
+	node := mustLoadNode(t)
+	peers := []ConfPeer{
+		{PublicKey: "CLIENT=", AllowedIPs: []string{"10.0.0.2/32"}},
+		{PublicKey: "EXIT=", AllowedIPs: []string{"0.0.0.0/0"}, Endpoint: "203.0.113.7:443"},
+	}
+
+	conf := renderConf(node, peers)
+	if !strings.Contains(conf, "Endpoint = 203.0.113.7:443") {
+		t.Errorf("inner-link Endpoint missing from conf:\n%s", conf)
+	}
+	if strings.Count(conf, "Endpoint =") != 1 {
+		t.Errorf("Endpoint lines = %d, want 1 (only the inner link)",
+			strings.Count(conf, "Endpoint ="))
+	}
+
+	parsed, err := parseConfPeers([]byte(conf))
+	if err != nil {
+		t.Fatalf("parseConfPeers: %v", err)
+	}
+	var exit *ConfPeer
+	for i := range parsed {
+		if parsed[i].PublicKey == "EXIT=" {
+			exit = &parsed[i]
+		}
+		if parsed[i].PublicKey == "CLIENT=" && parsed[i].Endpoint != "" {
+			t.Errorf("client peer gained an endpoint: %q", parsed[i].Endpoint)
+		}
+	}
+	if exit == nil || exit.Endpoint != "203.0.113.7:443" {
+		t.Fatalf("inner-link endpoint did not round-trip: %+v", exit)
+	}
+}
+
 // TestParseConfPeersIgnoresInterface guards the buoy invariant: the
 // [Interface] section in awg0.conf is buoy-owned. coxswain-supplied obfuscation
 // values, even if smuggled into a pushed conf, must not be readable as peers.

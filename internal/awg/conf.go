@@ -17,12 +17,17 @@ const (
 	MTU        uint16 = 1420
 )
 
-// ConfPeer is one [Peer] section of awg0.conf, as buoy writes it. buoy never
-// sets Endpoint — clients dial the node, not the other way around.
+// ConfPeer is one [Peer] section of awg0.conf, as buoy writes it.
+//
+// Endpoint is empty for client peers — clients dial the node, so the node never
+// records where to reach them. It is set only for a node→node inner link, where
+// this node dials the far node (DESIGN §3, node cascade): the entry node's
+// inner-link peer carries the exit node's public AmneziaWG endpoint.
 type ConfPeer struct {
 	PublicKey    string
 	PresharedKey string
 	AllowedIPs   []string
+	Endpoint     string
 }
 
 // renderConf produces an awg0.conf whose [Interface] block is sourced from
@@ -46,6 +51,9 @@ func renderConf(n *Node, peers []ConfPeer) string {
 		}
 		if len(p.AllowedIPs) > 0 {
 			fmt.Fprintf(&b, "AllowedIPs = %s\n", strings.Join(p.AllowedIPs, ", "))
+		}
+		if p.Endpoint != "" {
+			fmt.Fprintf(&b, "Endpoint = %s\n", p.Endpoint)
 		}
 	}
 	return b.String()
@@ -96,6 +104,8 @@ func parseConfPeers(data []byte) ([]ConfPeer, error) {
 			cur.PresharedKey = val
 		case "allowedips":
 			cur.AllowedIPs = splitCSV(val)
+		case "endpoint":
+			cur.Endpoint = val
 		}
 	}
 	flush()

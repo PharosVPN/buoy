@@ -141,6 +141,7 @@ func (s *service) PushConfig(ctx context.Context, req *buoyv1.PushConfigRequest)
 			PublicKey:    p.GetPublicKey(),
 			PresharedKey: p.GetPresharedKey(),
 			AllowedIPs:   append([]string(nil), p.GetAllowedIps()...),
+			Endpoint:     awg.FirstEndpoint(p.GetEndpoints()),
 		})
 	}
 

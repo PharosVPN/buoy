@@ -75,7 +75,7 @@ func TestAddPeerKeepsPSKOffArgv(t *testing.T) {
 	}
 
 	rt := &ExecRuntime{Interface: "awg0", AWGBin: stub}
-	if err := rt.AddPeer(context.Background(), "PUB=", "SECRETPSK==", []string{"10.0.0.2/32"}); err != nil {
+	if err := rt.AddPeer(context.Background(), "PUB=", "SECRETPSK==", []string{"10.0.0.2/32"}, ""); err != nil {
 		t.Fatalf("AddPeer: %v", err)
 	}
 
