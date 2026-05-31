@@ -214,6 +214,14 @@ func (s *service) SetNetworkConfig(ctx context.Context, req *buoyv1.SetNetworkCo
 		Masquerade: cfg.GetMasquerade(),
 		Isolation:  cfg.GetIsolation(),
 	}
+	for _, t := range cfg.GetTransits() {
+		p.Transits = append(p.Transits, netpolicy.TransitRoute{
+			DeviceCIDR:     t.GetDeviceCidr(),
+			InnerInterface: t.GetInnerInterface(),
+			Mark:           t.GetMark(),
+			Table:          t.GetTable(),
+		})
+	}
 	if err := p.Validate(); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "SetNetworkConfig: %v", err)
 	}

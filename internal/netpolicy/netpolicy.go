@@ -15,6 +15,7 @@ package netpolicy
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -25,12 +26,27 @@ const (
 	egressToken = "%e"
 )
 
-// ErrMasqueradeNeedsForwarding / ErrIsolationNeedsForwarding report an invalid
-// policy: you cannot NAT or isolate traffic that is not forwarded.
+// ErrMasqueradeNeedsForwarding / ErrIsolationNeedsForwarding / ErrTransitNeedsForwarding
+// report an invalid policy: you cannot NAT, isolate, or transit traffic that is
+// not forwarded.
 var (
 	ErrMasqueradeNeedsForwarding = errors.New("netpolicy: masquerade requires forwarding")
 	ErrIsolationNeedsForwarding  = errors.New("netpolicy: isolation requires forwarding")
+	ErrTransitNeedsForwarding    = errors.New("netpolicy: transit routes require forwarding")
+	ErrTransitIncomplete         = errors.New("netpolicy: transit route needs device_cidr, inner_interface, mark and table")
 )
+
+// TransitRoute policy-routes one cascaded device's tunnel traffic into an inner
+// AmneziaWG interface toward its exit, instead of masquerading it to the public
+// egress (DESIGN §3, the entry-node side of node cascade). Transited packets
+// leave via the inner interface, so the egress masquerade rule never matches
+// them — the exit node masquerades. coxswain computes the mark and table.
+type TransitRoute struct {
+	DeviceCIDR     string
+	InnerInterface string
+	Mark           uint32
+	Table          uint32
+}
 
 // Policy is a node's traffic-handling policy. It mirrors coxswain's
 // netpolicy.Policy and the pharos.buoy.v1.NetworkConfig wire message.
@@ -38,6 +54,9 @@ type Policy struct {
 	Forwarding bool
 	Masquerade bool
 	Isolation  bool
+	// Transits route specific devices into inner links (node cascade); empty on
+	// a plain node.
+	Transits []TransitRoute
 }
 
 // Validate reports whether the policy is internally consistent. It matches
@@ -48,6 +67,14 @@ func (p Policy) Validate() error {
 	}
 	if p.Isolation && !p.Forwarding {
 		return ErrIsolationNeedsForwarding
+	}
+	if len(p.Transits) > 0 && !p.Forwarding {
+		return ErrTransitNeedsForwarding
+	}
+	for _, t := range p.Transits {
+		if t.DeviceCIDR == "" || t.InnerInterface == "" || t.Mark == 0 || t.Table == 0 {
+			return ErrTransitIncomplete
+		}
 	}
 	return nil
 }
@@ -93,6 +120,23 @@ func (p Policy) Rules() Rules {
 			"iptables -t nat -A POSTROUTING -o "+egressToken+" -j MASQUERADE")
 		r.PostDown = append(r.PostDown,
 			"iptables -t nat -D POSTROUTING -o "+egressToken+" -j MASQUERADE")
+	}
+
+	// Transit (node cascade): mark each cascaded device's packets, policy-route
+	// the mark into the device's inner interface, and add a default route in
+	// that table. Transited packets egress the inner interface, so they never
+	// match the egress masquerade above — the exit node NATs them instead.
+	for _, t := range p.Transits {
+		mark := strconv.FormatUint(uint64(t.Mark), 10)
+		table := strconv.FormatUint(uint64(t.Table), 10)
+		r.PostUp = append(r.PostUp,
+			"iptables -t mangle -A PREROUTING -i "+ifaceToken+" -s "+t.DeviceCIDR+" -j MARK --set-mark "+mark,
+			"ip rule add fwmark "+mark+" lookup "+table,
+			"ip route add default dev "+t.InnerInterface+" table "+table)
+		r.PostDown = append(r.PostDown,
+			"ip route del default dev "+t.InnerInterface+" table "+table,
+			"ip rule del fwmark "+mark+" lookup "+table,
+			"iptables -t mangle -D PREROUTING -i "+ifaceToken+" -s "+t.DeviceCIDR+" -j MARK --set-mark "+mark)
 	}
 	return r
 }

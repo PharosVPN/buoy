@@ -105,6 +105,77 @@ func TestValidate(t *testing.T) {
 	if err := (Policy{Forwarding: true, Masquerade: true, Isolation: true}).Validate(); err != nil {
 		t.Errorf("valid policy rejected: %v", err)
 	}
+	// Transit requires forwarding.
+	tr := TransitRoute{DeviceCIDR: "10.8.0.5/32", InnerInterface: "awg1", Mark: 100, Table: 100}
+	if err := (Policy{Transits: []TransitRoute{tr}}).Validate(); !errors.Is(err, ErrTransitNeedsForwarding) {
+		t.Errorf("transit without forwarding: got %v", err)
+	}
+	// Incomplete transit is rejected.
+	if err := (Policy{Forwarding: true, Transits: []TransitRoute{{DeviceCIDR: "10.8.0.5/32"}}}).Validate(); !errors.Is(err, ErrTransitIncomplete) {
+		t.Errorf("incomplete transit: got %v", err)
+	}
+	if err := (Policy{Forwarding: true, Transits: []TransitRoute{tr}}).Validate(); err != nil {
+		t.Errorf("valid transit policy rejected: %v", err)
+	}
+}
+
+// TestTransitRulesCanonical pins the transit rule set — the cross-repo contract
+// with coxswain's netpolicy transit rendering (DESIGN §3 transit mode).
+func TestTransitRulesCanonical(t *testing.T) {
+	p := Policy{
+		Forwarding: true,
+		Masquerade: true,
+		Transits: []TransitRoute{
+			{DeviceCIDR: "10.8.0.5/32", InnerInterface: "awg1", Mark: 100, Table: 100},
+		},
+	}
+	r := p.Rules()
+	wantUp := []string{
+		"iptables -t mangle -A PREROUTING -i %i -s 10.8.0.5/32 -j MARK --set-mark 100",
+		"ip rule add fwmark 100 lookup 100",
+		"ip route add default dev awg1 table 100",
+	}
+	for _, w := range wantUp {
+		if !containsLine(r.PostUp, w) {
+			t.Errorf("PostUp missing %q\n got: %#v", w, r.PostUp)
+		}
+	}
+	wantDown := []string{
+		"ip route del default dev awg1 table 100",
+		"ip rule del fwmark 100 lookup 100",
+		"iptables -t mangle -D PREROUTING -i %i -s 10.8.0.5/32 -j MARK --set-mark 100",
+	}
+	for _, w := range wantDown {
+		if !containsLine(r.PostDown, w) {
+			t.Errorf("PostDown missing %q\n got: %#v", w, r.PostDown)
+		}
+	}
+}
+
+func containsLine(lines []string, want string) bool {
+	for _, l := range lines {
+		if l == want {
+			return true
+		}
+	}
+	return false
+}
+
+// policyEqual compares two policies field-wise (Policy is no longer == due to
+// the Transits slice; TransitRoute itself is comparable).
+func policyEqual(a, b Policy) bool {
+	if a.Forwarding != b.Forwarding || a.Masquerade != b.Masquerade || a.Isolation != b.Isolation {
+		return false
+	}
+	if len(a.Transits) != len(b.Transits) {
+		return false
+	}
+	for i := range a.Transits {
+		if a.Transits[i] != b.Transits[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestResolveSubstitutesTokens(t *testing.T) {
@@ -191,8 +262,33 @@ func TestApplyInstallsRules(t *testing.T) {
 	if len(ex.runs) != 5 {
 		t.Fatalf("want 5 commands, got %d: %v", len(ex.runs), ex.runs)
 	}
-	if got := a.Policy(); got != (Policy{Forwarding: true, Masquerade: true}) {
+	if got := a.Policy(); !policyEqual(got, Policy{Forwarding: true, Masquerade: true}) {
 		t.Errorf("Policy() = %+v", got)
+	}
+}
+
+func TestApplyInstallsTransitRoute(t *testing.T) {
+	ex := &fakeExec{}
+	a := newTestApplier(t, ex, fakeEgress{"eth0"})
+	p := Policy{Forwarding: true, Masquerade: true, Transits: []TransitRoute{
+		{DeviceCIDR: "10.8.0.5/32", InnerInterface: "awg1", Mark: 100, Table: 100},
+	}}
+	if err := a.Apply(context.Background(), p); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	sawRoute, sawRule, sawMark := false, false, false
+	for _, r := range ex.runs {
+		switch {
+		case containsArg(r, "route") && containsArg(r, "awg1"):
+			sawRoute = true
+		case containsArg(r, "rule") && containsArg(r, "fwmark"):
+			sawRule = true
+		case containsArg(r, "PREROUTING") && containsArg(r, "MARK"):
+			sawMark = true
+		}
+	}
+	if !sawRoute || !sawRule || !sawMark {
+		t.Errorf("transit apply incomplete: route=%v rule=%v mark=%v\nruns: %v", sawRoute, sawRule, sawMark, ex.runs)
 	}
 }
 
@@ -230,7 +326,7 @@ func TestApplyRollsBackOnFailure(t *testing.T) {
 		t.Fatal("expected Apply to fail")
 	}
 	// Nothing should be recorded as the applied policy.
-	if got := a.Policy(); got != (Policy{}) {
+	if got := a.Policy(); !policyEqual(got, Policy{}) {
 		t.Errorf("policy should be unset after failed apply, got %+v", got)
 	}
 	// Rollback should have issued delete commands.
@@ -265,7 +361,7 @@ func TestReapplyAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New a2: %v", err)
 	}
-	if got := a2.Policy(); got != (Policy{Forwarding: true, Masquerade: true}) {
+	if got := a2.Policy(); !policyEqual(got, Policy{Forwarding: true, Masquerade: true}) {
 		t.Fatalf("loaded policy = %+v", got)
 	}
 	if err := a2.Reapply(ctx); err != nil {
